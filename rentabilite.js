@@ -27,7 +27,7 @@ let expenses=typeof db!=='undefined'&&Array.isArray(db.expenses)?db.expenses:[];
 let orderList=typeof orders!=='undefined'&&Array.isArray(orders)?orders:[];
 let payments=orderList.flatMap(o=>Array.isArray(o.payments)?o.payments:[]);
 let atelier=readAtelier();let ca=sum(sales,'total',start,end)+sum(payments,'amount',start,end);
-let flowers=atelier.lots.filter(l=>l.date>=start&&l.date<=end).reduce((a,l)=>a+Number(l.qty||0)*Number(l.unit||0),0);
+let flowers=atelier.lots.filter(l=>{let d=mode==='week'?(l.weekStart||l.date):l.date;return d>=start&&d<=end}).reduce((a,l)=>a+Number(l.qty||0)*Number(l.unit||0),0);
 let flowerExpenses=expenses.filter(x=>x.type==='Fleurs et feuillages');let manualFlowers=sum(flowerExpenses,'amount',start,end);
 let other=expenses.filter(x=>x.type!=='Fleurs et feuillages');let otherCost=sum(other,'amount',start,end);
 // Entries from Atelier and manually recorded flower invoices may represent the same purchase.
