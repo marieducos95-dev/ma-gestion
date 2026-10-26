@@ -1,0 +1,56 @@
+/* Tableau de pilotage financier — lecture seule des ventes, commandes et lots. */
+(()=>{'use strict';
+const $=id=>document.getElementById(id), euro=n=>Number(n||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}),num=n=>Number(n||0).toLocaleString('fr-FR',{maximumFractionDigits:1});
+const iso=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+const at=s=>new Date(s+'T12:00:00');
+const offset=(s,n)=>{let d=at(s);d.setDate(d.getDate()+n);return iso(d)};
+const monday=s=>{let d=at(s);d.setDate(d.getDate()-(d.getDay()+6)%7);return iso(d)};
+const key='ma-gestion-rentabilite-v1';let config={forecasts:{},adjustments:{}};
+try{let v=JSON.parse(localStorage.getItem(key)||'{}');if(v&&typeof v==='object')config={forecasts:v.forecasts||{},adjustments:v.adjustments||{}}}catch{}
+const save=()=>localStorage.setItem(key,JSON.stringify(config));
+let mode='month',anchor=iso(new Date());
+let nav=document.querySelector('main nav');if(!nav)return;
+let button=document.createElement('button');button.dataset.tab='rentabilite';button.textContent='Rentabilité';nav.append(button);
+let section=document.createElement('section');section.id='rentabilite';section.className='hidden';
+section.innerHTML=`<h2>🌸 Ma rentabilité</h2><div class="panel"><div class="row" style="gap:6px;flex-wrap:wrap"><button type="button" data-finmode="week">Semaine</button><button type="button" data-finmode="month">Mois</button><button type="button" data-finmode="year">Année</button></div><div class="row"><button type="button" id="finPrev">←</button><strong id="finPeriod" style="text-align:center;flex:1"></strong><button type="button" id="finNext">→</button></div><label>Aller à une date</label><input type="date" id="finDate"></div><div class="panel"><h3>Résultats enregistrés</h3><div class="two"><div class="stat">Chiffre d'affaires<b id="finCA">—</b></div><div class="stat">Achats de fleurs<b id="finFlowers">—</b></div><div class="stat">Marge sur achats<b id="finMargin">—</b></div><div class="stat">Marge sur CA<b id="finRate">—</b></div><div class="stat">Coefficient réel<b id="finCoef">—</b></div><div class="stat">Résultat après charges<b id="finProfit">—</b></div></div><p id="finGoal" class="help"></p><div id="finDetail"></div><p class="help">La marge sur achats = encaissements − achats de fleurs datés de la période. Le coefficient x3 est un objectif de pilotage, pas un bénéfice garanti. Les pertes sont déjà comprises dans les achats et ne sont pas déduites une seconde fois.</p></div><div class="panel"><h3>Prévisions et ajustements</h3><p class="help">Facultatif : renseigne un objectif pour la période sélectionnée. Les montants réels restent calculés automatiquement.</p><label>Chiffre d'affaires prévu (€)</label><input type="number" min="0" step="0.01" id="finForecastCA" placeholder="Facultatif"><label>Achats de fleurs prévus (€)</label><input type="number" min="0" step="0.01" id="finForecastFlowers" placeholder="Facultatif"><label>Autres charges prévues (€)</label><input type="number" min="0" step="0.01" id="finForecastOther" placeholder="Facultatif"><button type="button" id="finSaveForecast" class="primary full">Enregistrer la prévision</button><div id="finForecastResult"></div></div><div class="panel"><h3>Stock et bénéfice</h3><p class="help">Pour une marge réelle sur fleurs, indique éventuellement la valeur de ton stock au début et à la fin de la période. Sans cela, le résultat affiché est une estimation sur achats.</p><label>Stock initial (€)</label><input type="number" min="0" step="0.01" id="finOpening" placeholder="Non renseigné"><label>Stock final (€)</label><input type="number" min="0" step="0.01" id="finClosing" placeholder="Non renseigné"><button type="button" id="finSaveStock" class="full">Enregistrer les valeurs de stock</button><div id="finStockResult"></div></div><div class="panel"><h3>Compléter mes anciens mois</h3><p class="help">Tu peux ajouter plus tard les anciennes dépenses dans « Achats et charges » en choisissant leur date réelle, et les anciens marchés dans « Historique ». Les lots de fleurs sont enregistrés dans l'Atelier à leur date d'achat.</p><button type="button" data-fin-go="depenses" class="full">🧾 Saisir une dépense datée</button><button type="button" data-fin-go="historique" class="full">🗓️ Ajouter un ancien marché</button><button type="button" data-fin-go="atelier" class="full">🌷 Ouvrir l'Atelier</button></div>`;
+document.querySelector('main').append(section);
+const span=()=>{if(mode==='week'){let s=monday(anchor);return [s,offset(s,6)]}if(mode==='month'){let s=anchor.slice(0,7)+'-01';let d=at(s);d.setMonth(d.getMonth()+1);d.setDate(0);return [s,iso(d)]}return [anchor.slice(0,4)+'-01-01',anchor.slice(0,4)+'-12-31']};
+const label=([s,e])=>mode==='week'?`Du ${at(s).toLocaleDateString('fr-FR')} au ${at(e).toLocaleDateString('fr-FR')}`:mode==='month'?at(s).toLocaleDateString('fr-FR',{month:'long',year:'numeric'}):s.slice(0,4);
+const sum=(arr,field,start,end)=>arr.filter(x=>x&&typeof x.date==='string'&&x.date>=start&&x.date<=end).reduce((a,x)=>a+Number(x[field]||0),0);
+const val=id=>$(id).value.trim()===''?null:Number($(id).value);
+const set=(id,v)=>$(id).value=v==null?'':v;
+function readAtelier(){try{let v=JSON.parse(localStorage.getItem('ma-gestion-atelier-v1')||'{}');return {lots:Array.isArray(v.lots)?v.lots:[],losses:Array.isArray(v.losses)?v.losses:[]}}catch{return {lots:[],losses:[]}}}
+function render(){let [start,end]=span(),pkey=mode+':'+start;
+$('finDate').value=anchor;$('finPeriod').textContent=label([start,end]);section.querySelectorAll('[data-finmode]').forEach(b=>{b.classList.toggle('primary',b.dataset.finmode===mode)});
+let sales=typeof db!=='undefined'&&Array.isArray(db.sales)?db.sales:[];
+let expenses=typeof db!=='undefined'&&Array.isArray(db.expenses)?db.expenses:[];
+let orderList=typeof orders!=='undefined'&&Array.isArray(orders)?orders:[];
+let payments=orderList.flatMap(o=>Array.isArray(o.payments)?o.payments:[]);
+let atelier=readAtelier();let ca=sum(sales,'total',start,end)+sum(payments,'amount',start,end);
+let flowers=atelier.lots.filter(l=>l.date>=start&&l.date<=end).reduce((a,l)=>a+Number(l.qty||0)*Number(l.unit||0),0);
+let flowerExpenses=expenses.filter(x=>x.type==='Fleurs et feuillages');let manualFlowers=sum(flowerExpenses,'amount',start,end);
+let other=expenses.filter(x=>x.type!=='Fleurs et feuillages');let otherCost=sum(other,'amount',start,end);
+// Entries from Atelier and manually recorded flower invoices may represent the same purchase.
+// Prefer Atelier purchases when present; flag duplicate risk and do not silently add both.
+let flowerCost=flowers>0?flowers:manualFlowers;
+let loss=atelier.losses.filter(l=>l.date>=start&&l.date<=end&&l.reason!=='Utilisées dans des bouquets').reduce((a,l)=>{let lot=atelier.lots.find(x=>x.id===l.lot);return a+Number(l.qty||0)*Number(lot?.unit||0)},0);
+let margin=ca-flowerCost,rate=ca?margin/ca*100:null,coef=flowerCost?ca/flowerCost:null,profit=margin-otherCost;
+$('finCA').textContent=euro(ca);$('finFlowers').textContent=euro(flowerCost);$('finMargin').textContent=euro(margin);$('finRate').textContent=rate===null?'—':num(rate)+' %';$('finCoef').textContent=coef===null?'—':'x'+num(coef);$('finProfit').textContent=euro(profit);
+$('finGoal').textContent=coef===null?'Objectif x3 : renseigne des achats de fleurs pour calculer le coefficient.':coef>=3?'✓ Objectif minimum x3 atteint ou dépassé.':'⚠ Coefficient inférieur à ton objectif minimum x3.';
+$('finDetail').innerHTML=`<div class="row"><span>Autres charges saisies</span><strong>${euro(otherCost)}</strong></div><div class="row"><span>Pertes déclarées (information)</span><strong>${euro(loss)}</strong></div><div class="row"><span>Objectif CA à x3</span><strong>${euro(flowerCost*3)}</strong></div>${flowers>0&&manualFlowers>0?'<p class="help">⚠ Achats de fleurs présents dans l’Atelier ET dans les dépenses : vérifie les doublons. Ici seuls les achats Atelier sont retenus.</p>':''}<p class="help">Résultat estimé hors charges non saisies, cotisations éventuelles et ajustement de stock.</p>`;
+let forecast=config.forecasts[pkey]||{};set('finForecastCA',forecast.ca);set('finForecastFlowers',forecast.flowers);set('finForecastOther',forecast.other);
+$('finForecastResult').innerHTML=forecast.ca!=null?`<p class="help">Prévision : CA ${euro(forecast.ca)} · marge ${euro(forecast.ca-(forecast.flowers||0))} · résultat ${euro(forecast.ca-(forecast.flowers||0)-(forecast.other||0))}. Écart de CA réel : ${euro(ca-forecast.ca)}.</p>`:'<p class="help">Aucune prévision enregistrée pour cette période.</p>';
+let adj=config.adjustments[pkey]||{};set('finOpening',adj.opening);set('finClosing',adj.closing);
+let complete=adj.opening!=null&&adj.closing!=null;let consumed=flowerCost+(adj.opening||0)-(adj.closing||0);
+$('finStockResult').innerHTML=complete?`<p class="help">Coût des fleurs consommées (stock initial + achats − stock final) : <strong>${euro(consumed)}</strong><br>Marge ajustée sur fleurs : <strong>${euro(ca-consumed)}</strong><br>Résultat ajusté après charges saisies : <strong>${euro(ca-consumed-otherCost)}</strong>.</p>`:'<p class="help">Stock non renseigné : marge et résultat affichés plus haut calculés sur les achats de la période.</p>';
+}
+section.addEventListener('click',e=>{let b=e.target.closest('[data-finmode],[data-fin-go]');if(!b)return;if(b.dataset.finmode){mode=b.dataset.finmode;render()}else if(b.dataset.finGo==='atelier'){let x=$('atMenu');if(x)x.click()}else{let x=document.querySelector(`[data-tab="${b.dataset.finGo}"]`)||document.querySelector(`[data-go="${b.dataset.finGo}"]`);if(x)x.click()}});
+$('finPrev').onclick=()=>{let d=at(anchor);if(mode==='week')d.setDate(d.getDate()-7);else if(mode==='month')d.setMonth(d.getMonth()-1);else d.setFullYear(d.getFullYear()-1);anchor=iso(d);render()};
+$('finNext').onclick=()=>{let d=at(anchor);if(mode==='week')d.setDate(d.getDate()+7);else if(mode==='month')d.setMonth(d.getMonth()+1);else d.setFullYear(d.getFullYear()+1);anchor=iso(d);render()};
+$('finDate').onchange=()=>{if($('finDate').value){anchor=$('finDate').value;render()}};
+$('finSaveForecast').onclick=()=>{let [s]=span(),pkey=mode+':'+s;let values={ca:val('finForecastCA'),flowers:val('finForecastFlowers'),other:val('finForecastOther')};if(Object.values(values).some(x=>x!==null&&(!Number.isFinite(x)||x<0)))return alert('Vérifie les montants.');config.forecasts[pkey]=values;save();render()};
+$('finSaveStock').onclick=()=>{let [s]=span(),pkey=mode+':'+s;let values={opening:val('finOpening'),closing:val('finClosing')};if(Object.values(values).some(x=>x!==null&&(!Number.isFinite(x)||x<0)))return alert('Vérifie les montants.');config.adjustments[pkey]=values;save();render()};
+button.addEventListener('click',()=>{document.querySelectorAll('main section').forEach(x=>x.classList.add('hidden'));section.classList.remove('hidden');nav.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===button));render()});
+let tile=document.querySelector('#accueil .tiles');if(tile){let b=document.createElement('button');b.innerHTML='📊<b>Rentabilité</b><small>Marge, coefficient x3 et bénéfice</small>';b.onclick=()=>button.click();tile.append(b)}
+render();
+})();
