@@ -11,7 +11,13 @@ const prepCycle=date=>{let d=new Date(date+'T12:00:00');if(Number.isNaN(d.getTim
  d.setDate(d.getDate()-delta);return iso(d)};
 const shipmentCycle=date=>{let d=new Date(date+'T12:00:00');if(Number.isNaN(d.getTime()))return '';if(d.getDay()===1||d.getDay()===2){d.setDate(d.getDate()+(3-d.getDay()));return iso(d)}return prepCycle(date)};
 const currentCycle=()=>{let d=new Date(now()+'T12:00:00');if(d.getDay()===1||d.getDay()===2){d.setDate(d.getDate()+(3-d.getDay()));return iso(d)}return prepCycle(now())};
-const cycleLots=()=>lots().filter(l=>shipmentCycle(l.prepDate||l.date)===currentCycle());
+// La semaine explicitement attribuée à un lot prime sur sa date de facture.
+// Un lot historique daté du 26/10 mais classé au 12/10 ne doit pas entrer
+// dans les compositions du 28/10.
+const cycleLots=()=>lots().filter(l=>{
+ const assigned=typeof l.weekStart==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(l.weekStart)?l.weekStart:(l.prepDate||l.date);
+ return shipmentCycle(assigned)===currentCycle();
+});
 const cycleDraft=()=>{data.draftsByCycle=data.draftsByCycle||{};return data.draftsByCycle[currentCycle()]||(data.draftsByCycle[currentCycle()]={})};
 const catalog=()=>{let map=new Map(),allLosses=losses();for(let l of cycleLots()){let name=String(l.name||l.original||'Fleur').trim(),k=name.toLowerCase(),used=allLosses.filter(x=>x.lot===l.id).reduce((n,x)=>n+Number(x.qty||0),0),qty=Math.max(0,(Number(l.qty)||0)-used),entry=map.get(k)||{name,qty:0,value:0};entry.qty+=qty;entry.value+=qty*(Number(l.unit)||0);map.set(k,entry)}return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,'fr'))};
 function recipe(price){
