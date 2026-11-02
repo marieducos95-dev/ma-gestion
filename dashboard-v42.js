@@ -10,6 +10,8 @@ function data(a,b){let sales=(typeof db!=='undefined'&&Array.isArray(db.sales)?d
 const monthly=new Set(simple.filter(x=>x.mode==='month').map(x=>x.period));
 const relevant=simple.filter(x=>x.mode==='month'?x.period>=a.slice(0,7)&&x.period<=b.slice(0,7)&&mode!=='day'&&mode!=='week':within(x.period,a,b)&&!monthly.has(x.period.slice(0,7)));
 let flowers=relevant.reduce((sum,x)=>sum+Number(x.amount||0),0);
+let market=sales.reduce((total,s)=>total+Number(s.total||0),0);
+let ordersCA=pay.reduce((total,p)=>total+Number(p.amount||0),0);
 let manual=0;
 let other=ex.filter(x=>!/(fleurs|feuillages)/i.test(x.type||'')).reduce((s,x)=>s+Number(x.amount||0),0);let clients=sales.filter(x=>!x.historic).length+pay.length;let historic=typeof db!=='undefined'&&Array.isArray(db.historicClients)?db.historicClients:[];clients+=historic.filter(x=>within(x.date,a,b)).reduce((s,x)=>s+Number(x.count??x.clients??0),0);let items={};let bouquetCount=0;sales.forEach(s=>(s.items||[]).forEach(x=>{let p=typeof x==='number'?x:Number(x.price||x.amount||x.value||0);if(p>0){items[p]=(items[p]||0)+1;bouquetCount++}}));return{ca:market+ordersCA,market,ordersCA,clients,bouquetCount,items,flowers:flowers,other,duplicate:false,known:simple.length>0,sales,ex,pay}}
 function label(a,b){let d=x=>new Date(x+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});return a===b?d(a):d(a)+' – '+d(b)}
